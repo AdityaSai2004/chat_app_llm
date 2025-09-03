@@ -17,7 +17,7 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
     if not user or not verify_password(request.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_access_token({"sub": user.username})
-    return {"access_token": token, "token_type": "bearer"}
+    return {"user_name" : user.username, "access_token": token, "token_type": "bearer" }
 
 @router.post("/auth/signup")
 async def signup(request: LoginRequest, db: Session = Depends(get_db)):
