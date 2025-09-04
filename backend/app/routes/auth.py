@@ -4,8 +4,7 @@ from app.models.user import User
 from app.utils.auth_utils import verify_password, create_access_token, hash_password, get_user_id_from_token
 from app.db import get_db
 from pydantic import BaseModel
-from fastapi.security import HTTPAuthorizationCredentials
-from fastapi.security import HTTPBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 router = APIRouter()
 bearer_scheme = HTTPBearer()
