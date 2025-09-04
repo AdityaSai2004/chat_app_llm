@@ -20,3 +20,17 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+def get_user_id_from_token(token: str):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        # print("Decoded JWT payload:", payload)
+        user_id = payload.get("sub")
+        # print("Extracted user_id (sub):", user_id)
+        if user_id is None:
+            print("Token missing 'sub' field.")
+            raise ValueError("Invalid token")
+        return int(user_id)
+    except jwt.PyJWTError as e:
+        print("JWT decode error:", e)
+        raise ValueError("Invalid token")
