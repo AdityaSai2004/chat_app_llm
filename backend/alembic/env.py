@@ -20,6 +20,7 @@ from app.models.user import User
 from app.models.rooms import Room
 from app.models.user_room import UserRoom
 from app.models.base import Base
+from app.models.messages import Message
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,

@@ -1,4 +1,3 @@
-
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from datetime import datetime
 from .base import Base
@@ -13,3 +12,4 @@ class Room(Base):
 	owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 	created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 	members = relationship("UserRoom", back_populates="room")
+	messages = relationship("Message", back_populates="room", cascade="all, delete-orphan")

@@ -11,3 +11,4 @@ class User(Base):
 	hashed_password = Column(String(128), nullable=False)
 	created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 	rooms = relationship("UserRoom", back_populates="user")
+	messages = relationship("Message", back_populates="user", cascade="all, delete-orphan")

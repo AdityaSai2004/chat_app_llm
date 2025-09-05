@@ -34,7 +34,6 @@ async def signup(request: LoginRequest, db: Session = Depends(get_db)):
 
 @router.get("/auth/me")
 async def get_current_user(db: Session = Depends(get_db), credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
-    print("Credentials:", credentials)
     user_id = get_user_id_from_token(credentials.credentials)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
