@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Boolean, Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from .base import Base
 
@@ -13,7 +13,7 @@ class Message(Base):
 
     content = Column(Text, nullable=False)
     message_type = Column(String, default="text")  # could be "text", "system", "bot"
-
+    processed = Column(Boolean, default=False, nullable=False)  # For command messages
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships
