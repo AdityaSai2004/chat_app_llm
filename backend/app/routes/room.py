@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.models.rooms import Room
 from app.models.user_room import UserRoom, RoomRole
 from app.utils.auth_utils import get_user_id_from_token
+from app.utils.bot_utils import get_or_create_bot_user
 from app.db import get_db
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
@@ -15,6 +16,7 @@ bearer_scheme = HTTPBearer()
 # Request model: only name
 class RoomCreateRequest(BaseModel):
     name: str
+    api_key: str
 
 # Response model: room_id, room_name, room_code
 class RoomCreateResponse(BaseModel):
@@ -57,7 +59,7 @@ async def create_room(request: RoomCreateRequest, db: Session = Depends(get_db),
     # if room code exists, regenerate
     while db.query(Room).filter(Room.code == room_code).first():
         room_code = uuid.uuid4().hex[:8]
-    new_room = Room(name=request.name, owner_id=user_id, code=room_code, created_at = datetime.utcnow())
+    new_room = Room(name=request.name, owner_id=user_id, code=room_code, created_at = datetime.utcnow(), api_key=request.api_key)
     db.add(new_room)
     db.commit()
     db.refresh(new_room)
@@ -65,6 +67,12 @@ async def create_room(request: RoomCreateRequest, db: Session = Depends(get_db),
     # Add creator to user_rooms table as owner
     creator_user_room = UserRoom(user_id=user_id, room_id=new_room.id, role=RoomRole.OWNER)
     db.add(creator_user_room)
+    
+    # Add bot to the room automatically
+    bot_user_id = get_or_create_bot_user(db)
+    bot_user_room = UserRoom(user_id=bot_user_id, room_id=new_room.id, role=RoomRole.BOT)
+    db.add(bot_user_room)
+    
     db.commit()
 
     return {"room_id": new_room.id, "room_name": new_room.name, "room_code": new_room.code}
@@ -99,6 +107,14 @@ async def join_room(room_code: str, db: Session = Depends(get_db), credentials: 
     # Add user to room as participant
     new_membership = UserRoom(user_id=user_id, room_id=room.id, role=RoomRole.PARTICIPANT)
     db.add(new_membership)
+    
+    # Ensure bot is also in the room (for rooms created before bot auto-join feature)
+    bot_user_id = get_or_create_bot_user(db)
+    bot_membership = db.query(UserRoom).filter(UserRoom.user_id == bot_user_id, UserRoom.room_id == room.id).first()
+    if not bot_membership:
+        bot_user_room = UserRoom(user_id=bot_user_id, room_id=room.id, role=RoomRole.BOT)
+        db.add(bot_user_room)
+    
     db.commit()
     db.refresh(new_membership)
 

@@ -1,5 +1,8 @@
 fastapi == 0.116.1
 passlib == 1.7.4
+bcrypt == 4.0.1
 PyJWT == 2.10.1
 SQLAlchemy == 2.0.43
 websockets == 15.0.1
+uvicorn == 0.24.0
+alembic == 1.12.1

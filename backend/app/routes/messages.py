@@ -7,6 +7,7 @@ from app.utils.auth_utils import get_user_id_from_token
 from app.db import get_db
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
+from llm.llm_queue import enqueue_bot_job
 import uuid
 from datetime import datetime
 router = APIRouter()
@@ -21,6 +22,7 @@ class SendMessageResponse(BaseModel):
     room_code: str
     user_id: int
     content: str
+    message_type: str  # "text", "command", "bot"
     sent_at: datetime
 
 class GetMessagesRequest(BaseModel):
@@ -38,21 +40,31 @@ async def send_message(room_code: str, message: SendMessageRequest, db: Session 
     if not db.query(UserRoom).filter(UserRoom.room_id == room.id, UserRoom.user_id == user_id).first():
         raise HTTPException(status_code=403, detail="User not in room")
     created_at = datetime.utcnow()
+    message_type = "text"  # Default message type
+    # if the message content has "@bot", set message_type to "command"
+    if "@bot" in message.content:
+        message_type = "command"        
     new_message = Message(
         room_id=room.id,
         user_id=user_id,
         content=message.content,
+        message_type=message_type,
         created_at=created_at
     )
     db.add(new_message)
     db.commit()
     db.refresh(new_message)
 
+    # If this is a command message, enqueue it for bot processing
+    if message_type == "command":
+        await enqueue_bot_job(room.id, new_message.id, message.content, room.api_key)
+
     return SendMessageResponse(
         message_id=new_message.id,
         room_code=room.code,
         user_id=user_id,
         content=new_message.content,
+        message_type=new_message.message_type,
         sent_at=new_message.created_at
     )
 
@@ -71,6 +83,7 @@ async def get_messages(room_code: str, db: Session = Depends(get_db), credential
             room_code=room.code,
             user_id=msg.user_id,
             content=msg.content,
+            message_type=msg.message_type,
             sent_at=msg.created_at
         ) for msg in messages
     ]
