@@ -10,6 +10,7 @@ interface TopNavigationProps {
     name: string;
     avatar?: string;
   };
+  actions?: React.ReactNode;
 }
 
 export default function TopNavigation({
@@ -17,6 +18,7 @@ export default function TopNavigation({
   onBack,
   showBackButton = false,
   user = { name: "User" },
+  actions,
 }: TopNavigationProps) {
   const navigationItems = [
     { name: "Home", href: "#", active: false },
@@ -80,8 +82,13 @@ export default function TopNavigation({
             ))}
           </nav>
 
-          {/* Right side - Settings and User */}
+          {/* Right side - Actions, Settings and User */}
           <div className="flex items-center space-x-4">
+            {/* Custom actions */}
+            {actions && (
+              <div className="flex items-center space-x-2">{actions}</div>
+            )}
+
             {/* Settings button */}
             <button
               className="p-2 rounded-lg hover:bg-slate-700 transition-colors text-slate-300 hover:text-white"

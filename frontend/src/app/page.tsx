@@ -4,8 +4,9 @@ import { useState } from "react";
 import AuthPage from "@/components/auth/AuthPage";
 import Dashboard from "@/components/dashboard/Dashboard";
 import RoomSettings from "@/components/room/RoomSettings";
+import ChatRoom from "@/components/chat/ChatRoom";
 
-type Page = "auth" | "dashboard" | "room-settings";
+type Page = "auth" | "dashboard" | "room-settings" | "chat-room";
 
 export default function HomePage() {
   // For development, toggle between different pages
@@ -17,9 +18,28 @@ export default function HomePage() {
       case "auth":
         return <AuthPage />;
       case "dashboard":
-        return <Dashboard />;
+        return (
+          <Dashboard
+            onJoinRoom={(roomId) => {
+              console.log("Joining room:", roomId);
+              setCurrentPage("chat-room");
+            }}
+          />
+        );
       case "room-settings":
-        return <RoomSettings onBack={() => setCurrentPage("dashboard")} />;
+        return (
+          <RoomSettings
+            onBack={() => setCurrentPage("dashboard")}
+            onJoinChat={() => setCurrentPage("chat-room")}
+          />
+        );
+      case "chat-room":
+        return (
+          <ChatRoom
+            onLeaveRoom={() => setCurrentPage("dashboard")}
+            onOpenSettings={() => setCurrentPage("room-settings")}
+          />
+        );
       default:
         return <Dashboard />;
     }
@@ -42,6 +62,11 @@ export default function HomePage() {
         label: "Room Settings",
         color: "bg-purple-600 hover:bg-purple-700",
       },
+      {
+        page: "chat-room" as Page,
+        label: "Chat Room",
+        color: "bg-indigo-600 hover:bg-indigo-700",
+      },
     ];
 
     return buttons
@@ -53,7 +78,13 @@ export default function HomePage() {
           className={`${
             button.color
           } text-white px-3 py-2 rounded-lg shadow-lg text-xs font-medium transition-colors ${
-            index === 0 ? "mb-2" : index === 1 ? "mb-4" : "mb-6"
+            index === 0
+              ? "mb-2"
+              : index === 1
+              ? "mb-4"
+              : index === 2
+              ? "mb-6"
+              : "mb-8"
           }`}
         >
           {button.label}

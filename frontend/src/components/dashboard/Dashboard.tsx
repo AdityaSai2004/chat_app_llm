@@ -1,14 +1,14 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import Sidebar from './Sidebar';
-import RoomsGrid from './RoomsGrid';
+import { useState } from "react";
+import Sidebar from "./Sidebar";
+import RoomsGrid from "./RoomsGrid";
 
 export interface Room {
   id: string;
   name: string;
   memberCount: number;
-  userRole: 'Owner' | 'Member';
+  userRole: "Owner" | "Member";
   unreadMessages: number;
   image: string;
 }
@@ -16,59 +16,68 @@ export interface Room {
 // Mock data for now - will be replaced with API calls
 const mockRooms: Room[] = [
   {
-    id: '1',
-    name: 'Tech Talk',
+    id: "1",
+    name: "Tech Talk",
     memberCount: 5,
-    userRole: 'Owner',
+    userRole: "Owner",
     unreadMessages: 2,
-    image: '/room-images/tech-talk.jpg'
+    image: "/room-images/tech-talk.jpg",
   },
   {
-    id: '2',
-    name: 'Book Club',
+    id: "2",
+    name: "Book Club",
     memberCount: 10,
-    userRole: 'Member',
+    userRole: "Member",
     unreadMessages: 0,
-    image: '/room-images/book-club.jpg'
+    image: "/room-images/book-club.jpg",
   },
   {
-    id: '3',
-    name: 'Gaming Lounge',
+    id: "3",
+    name: "Gaming Lounge",
     memberCount: 20,
-    userRole: 'Member',
+    userRole: "Member",
     unreadMessages: 5,
-    image: '/room-images/gaming-lounge.jpg'
+    image: "/room-images/gaming-lounge.jpg",
   },
   {
-    id: '4',
-    name: 'Travel Enthusiasts',
+    id: "4",
+    name: "Travel Enthusiasts",
     memberCount: 8,
-    userRole: 'Owner',
+    userRole: "Owner",
     unreadMessages: 1,
-    image: '/room-images/travel.jpg'
+    image: "/room-images/travel.jpg",
   },
   {
-    id: '5',
-    name: 'Fitness Fanatics',
+    id: "5",
+    name: "Fitness Fanatics",
     memberCount: 15,
-    userRole: 'Member',
+    userRole: "Member",
     unreadMessages: 3,
-    image: '/room-images/fitness.jpg'
-  }
+    image: "/room-images/fitness.jpg",
+  },
 ];
 
-export default function Dashboard() {
-  const [searchQuery, setSearchQuery] = useState('');
+interface DashboardProps {
+  onJoinRoom?: (roomId: string) => void;
+}
+
+export default function Dashboard({ onJoinRoom }: DashboardProps) {
+  const [searchQuery, setSearchQuery] = useState("");
   const [rooms, setRooms] = useState<Room[]>(mockRooms);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleJoinRoom = (roomId: string) => {
-    console.log('Joining room:', roomId);
-    // TODO: Implement join room functionality
+    console.log("Joining room:", roomId);
+    if (onJoinRoom) {
+      onJoinRoom(roomId);
+    } else {
+      // TODO: Default join room functionality
+      console.log("No onJoinRoom callback provided");
+    }
   };
 
   const handleCreateRoom = () => {
-    console.log('Creating new room');
+    console.log("Creating new room");
     // TODO: Implement create room functionality
   };
 
@@ -81,14 +90,18 @@ export default function Dashboard() {
     <div className="flex h-screen bg-slate-900 relative">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
-      
+
       {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} fixed lg:relative lg:translate-x-0 transition-transform duration-200 ease-in-out z-50 lg:z-auto`}>
+      <div
+        className={`${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        } fixed lg:relative lg:translate-x-0 transition-transform duration-200 ease-in-out z-50 lg:z-auto`}
+      >
         <Sidebar onCreateRoom={handleCreateRoom} />
       </div>
 
@@ -103,11 +116,23 @@ export default function Dashboard() {
                 className="lg:hidden p-2 rounded-lg hover:bg-slate-700 transition-colors"
                 aria-label="Toggle sidebar menu"
               >
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
                 </svg>
               </button>
-              <h1 className="text-xl lg:text-2xl font-bold text-white">My Rooms</h1>
+              <h1 className="text-xl lg:text-2xl font-bold text-white">
+                My Rooms
+              </h1>
             </div>
             <div className="relative">
               <input

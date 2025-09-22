@@ -24,6 +24,7 @@ export interface RoomSettingsData {
 interface RoomSettingsProps {
   roomData?: RoomSettingsData;
   onBack?: () => void;
+  onJoinChat?: () => void;
 }
 
 // Mock data for demonstration
@@ -43,6 +44,7 @@ const mockRoomData: RoomSettingsData = {
 export default function RoomSettings({
   roomData = mockRoomData,
   onBack,
+  onJoinChat,
 }: RoomSettingsProps) {
   const [settings, setSettings] = useState<RoomSettingsData>(roomData);
   const [isEditing, setIsEditing] = useState(false);
@@ -144,6 +146,16 @@ export default function RoomSettings({
         title="Room Settings"
         onBack={onBack}
         showBackButton={true}
+        actions={
+          onJoinChat && (
+            <button
+              onClick={onJoinChat}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium text-sm"
+            >
+              Join Chat
+            </button>
+          )
+        }
       />
 
       <main className="max-w-4xl mx-auto p-4 lg:p-6 space-y-6 lg:space-y-8">
