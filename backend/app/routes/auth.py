@@ -30,7 +30,9 @@ async def signup(request: LoginRequest, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    return {"detail": "User created successfully"}
+    # Return token immediately after signup (auto-login)
+    token = create_access_token({"sub": str(new_user.id)})
+    return {"user_name": new_user.username, "access_token": token, "token_type": "bearer"}
 
 @router.get("/auth/me")
 async def get_current_user(db: Session = Depends(get_db), credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
@@ -38,7 +40,13 @@ async def get_current_user(db: Session = Depends(get_db), credentials: HTTPAutho
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return {"user_name": user.username}
+    return {
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "created_at": user.created_at.isoformat() if user.created_at else None
+        }
+    }
 
 # @router.post("/auth/logout")
 # async def logout(db: Session = Depends(get_db)):
