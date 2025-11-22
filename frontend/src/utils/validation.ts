@@ -86,7 +86,6 @@ export interface LoginData {
 
 export interface SignupData {
   username: string;
-  email: string;
   password: string;
   confirmPassword: string;
 }
@@ -115,11 +114,6 @@ export const validateSignupForm = (data: SignupData): ValidationResult => {
   const usernameValidation = validateUsername(data.username);
   if (!usernameValidation.isValid) {
     errors.push(...usernameValidation.errors);
-  }
-
-  const emailValidation = validateEmail(data.email);
-  if (!emailValidation.isValid) {
-    errors.push(...emailValidation.errors);
   }
 
   const passwordValidation = validatePassword(data.password);

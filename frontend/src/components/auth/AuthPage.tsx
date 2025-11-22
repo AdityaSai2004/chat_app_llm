@@ -4,6 +4,7 @@ import { useState } from "react";
 import Logo from "../Logo";
 import InputField from "../InputField";
 import Button from "../Button";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   validateLoginForm,
   validateSignupForm,
@@ -11,11 +12,15 @@ import {
   type SignupData,
 } from "@/utils/validation";
 
-export default function AuthPage() {
+interface AuthPageProps {
+  onAuthSuccess?: () => void;
+}
+
+export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
+  const { login, signup, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<"login" | "signup">("login");
   const [formData, setFormData] = useState({
     username: "",
-    email: "",
     password: "",
     confirmPassword: "",
   });
@@ -54,12 +59,30 @@ export default function AuthPage() {
           return;
         }
 
-        // TODO: Call login API
-        console.log("Login submitted:", loginData);
+        // Call login API
+        const result = await login({
+          username: loginData.username,
+          password: loginData.password,
+        });
+
+        if (result.success) {
+          console.log('✅ Login successful in AuthPage, calling onAuthSuccess');
+          // Reset form after successful login
+          setFormData({
+            username: "",
+            password: "",
+            confirmPassword: "",
+          });
+          
+          // Call success callback if provided
+          onAuthSuccess?.();
+        } else {
+          console.error('❌ Login failed in AuthPage:', result.error);
+          setErrors([result.error || "Login failed. Please try again."]);
+        }
       } else {
         const signupData: SignupData = {
           username: formData.username,
-          email: formData.email,
           password: formData.password,
           confirmPassword: formData.confirmPassword,
         };
@@ -71,19 +94,28 @@ export default function AuthPage() {
           return;
         }
 
-        // TODO: Call signup API
-        console.log("Signup submitted:", signupData);
+        // Call signup API (note: backend doesn't use email, only username)
+        const result = await signup({
+          username: signupData.username,
+          password: signupData.password,
+        });
+
+        if (result.success) {
+          console.log('✅ Signup successful in AuthPage, calling onAuthSuccess');
+          // Reset form after successful signup
+          setFormData({
+            username: "",
+            password: "",
+            confirmPassword: "",
+          });
+          
+          // Call success callback if provided
+          onAuthSuccess?.();
+        } else {
+          console.error('❌ Signup failed in AuthPage:', result.error);
+          setErrors([result.error || "Signup failed. Please try again."]);
+        }
       }
-
-      // Reset form after successful submission
-      setFormData({
-        username: "",
-        email: "",
-        password: "",
-        confirmPassword: "",
-      });
-
-      // TODO: Redirect to dashboard or handle success
     } catch (error) {
       console.error("Form submission error:", error);
       setErrors(["An unexpected error occurred. Please try again."]);
@@ -97,7 +129,6 @@ export default function AuthPage() {
     setErrors([]);
     setFormData({
       username: "",
-      email: "",
       password: "",
       confirmPassword: "",
     });
@@ -175,15 +206,7 @@ export default function AuthPage() {
             required
           />
 
-          {!isLoginTab && (
-            <InputField
-              type="email"
-              placeholder="Email"
-              value={formData.email}
-              onChange={(value) => handleInputChange("email", value)}
-              required
-            />
-          )}
+
 
           <InputField
             type="password"

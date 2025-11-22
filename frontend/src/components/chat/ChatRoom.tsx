@@ -2,6 +2,10 @@
 
 import { useState, useRef, useEffect } from "react";
 import Logo from "../Logo";
+import { useParams, useRouter } from "next/navigation";
+import roomService, { Room } from "@/services/room";
+import messageService, { Message as ApiMessage } from "@/services/message";
+import authService from "@/services/auth";
 
 export interface ChatMessage {
   id: string;
@@ -31,64 +35,27 @@ export interface ChatRoomData {
 }
 
 interface ChatRoomProps {
-  roomData?: ChatRoomData;
+  roomData?: ChatRoomData; // Optional now as we fetch it
   onLeaveRoom?: () => void;
   onOpenSettings?: () => void;
 }
 
-// Mock data
-const mockRoomData: ChatRoomData = {
-  id: "1",
-  name: "General Chat",
-  description:
-    "Welcome to the general chat room. Feel free to discuss anything here.",
-  members: [
-    { id: "1", name: "Sophia", status: "online" },
-    { id: "2", name: "Alex", status: "online" },
-    { id: "3", name: "Maya", status: "online" },
-  ],
-};
-
-const mockMessages: ChatMessage[] = [
-  {
-    id: "1",
-    content: "Hello! I'm your AI assistant. Type @help for commands.",
-    sender: { id: "ai", name: "AI Assistant", type: "ai" },
-    timestamp: new Date(Date.now() - 300000), // 5 minutes ago
-    isCommand: true,
-  },
-  {
-    id: "2",
-    content:
-      "You can ask me to summarize the conversation, answer questions, or generate content.",
-    sender: { id: "ai", name: "AI Assistant", type: "ai" },
-    timestamp: new Date(Date.now() - 240000), // 4 minutes ago
-  },
-  {
-    id: "3",
-    content: "Hi AI Assistant! How can I summarize this chat?",
-    sender: { id: "user1", name: "Sophia", type: "user" },
-    timestamp: new Date(Date.now() - 120000), // 2 minutes ago
-  },
-  {
-    id: "4",
-    content: "To summarize, type @summarize.",
-    sender: { id: "ai", name: "AI Assistant", type: "ai" },
-    timestamp: new Date(Date.now() - 60000), // 1 minute ago
-    isCommand: true,
-  },
-];
-
 export default function ChatRoom({
-  roomData = mockRoomData,
   onLeaveRoom,
   onOpenSettings,
 }: ChatRoomProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>(mockMessages);
+  const params = useParams();
+  const roomCode = params.roomCode as string;
+  const router = useRouter();
+
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [roomData, setRoomData] = useState<ChatRoomData | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -98,31 +65,176 @@ export default function ChatRoom({
     scrollToBottom();
   }, [messages]);
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim()) return;
+  useEffect(() => {
+    const init = async () => {
+      const user = await authService.getCurrentUser();
+      if (user.success && user.data) {
+        setCurrentUser(user.data.user);
+      }
 
-    const message: ChatMessage = {
-      id: Date.now().toString(),
-      content: newMessage,
-      sender: { id: "current-user", name: "You", type: "user" },
-      timestamp: new Date(),
+      if (roomCode) {
+        fetchRoomDetails();
+        fetchMessages();
+        connectWebSocket();
+      }
+    };
+    init();
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [roomCode]);
+
+  const fetchRoomDetails = async () => {
+    const response = await roomService.getRoom(roomCode);
+    if (response.success && response.data) {
+      const apiRoom = response.data;
+      setRoomData({
+        id: apiRoom.room_id.toString(),
+        name: apiRoom.room_name,
+        description: `Room Code: ${apiRoom.room_code}`,
+        members: apiRoom.users.map(u => ({
+          id: u.user_id.toString(),
+          name: `User ${u.user_id}`, // We need to fetch user details to get names, for now placeholder
+          status: "online"
+        }))
+      });
+    }
+  };
+
+  const fetchMessages = async () => {
+    const response = await messageService.getMessages(roomCode);
+    if (response.success && response.data) {
+      const mappedMessages: ChatMessage[] = response.data.messages.map(msg => ({
+        id: msg.message_id.toString(),
+        content: msg.content,
+        sender: {
+          id: msg.user_id.toString(),
+          name: msg.message_type === 'bot' ? 'AI Assistant' : `User ${msg.user_id}`,
+          type: msg.message_type === 'bot' ? 'ai' : 'user'
+        },
+        timestamp: new Date(msg.sent_at),
+        isCommand: msg.message_type === 'command'
+      }));
+      setMessages(mappedMessages);
+    }
+  };
+
+  const connectWebSocket = () => {
+    const token = authService.getToken();
+    if (!token) return;
+
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
+    const ws = new WebSocket(`${wsUrl}/ws/room/${roomCode}?token=${token}`);
+
+    ws.onopen = () => {
+      console.log('Connected to WebSocket');
     };
 
-    setMessages((prev) => [...prev, message]);
-    setNewMessage("");
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      console.log('WebSocket message:', data);
 
-    // Simulate AI response for commands
-    if (newMessage.startsWith("@")) {
-      setTimeout(() => {
-        const aiResponse: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          content: `Processing command: ${newMessage}`,
-          sender: { id: "ai", name: "AI Assistant", type: "ai" },
-          timestamp: new Date(),
-          isCommand: true,
-        };
-        setMessages((prev) => [...prev, aiResponse]);
-      }, 1000);
+      if (data.msg) return; // Welcome message
+
+      // Handle incoming message
+      if (data.message) {
+        // If it's a bot message chunk (delta)
+        if (data.type === 'bot_message_delta') {
+          // We need to handle streaming updates. 
+          // For simplicity, let's just append to the last message if it's from bot and matches ID
+          // OR, we can just wait for the full message if we don't want to implement complex streaming UI right now.
+          // However, the backend broadcasts chunks.
+
+          setMessages(prev => {
+            const lastMsg = prev[prev.length - 1];
+            if (lastMsg && lastMsg.sender.type === 'ai' && lastMsg.id === `stream-${data.message_id}`) {
+              // Update existing streaming message
+              return prev.map(m => m.id === lastMsg.id ? { ...m, content: m.content + data.content } : m);
+            } else {
+              // Start new streaming message
+              return [...prev, {
+                id: `stream-${data.message_id}`,
+                content: data.content,
+                sender: { id: 'ai', name: 'AI Assistant', type: 'ai' },
+                timestamp: new Date(),
+                isCommand: false
+              }];
+            }
+          });
+        } else if (data.type === 'bot_message_start') {
+          setIsTyping(true);
+        } else if (data.type === 'bot_message_end') {
+          setIsTyping(false);
+          // Ideally replace the streaming message with the final one from DB or just leave it
+        } else {
+          // Standard message (user or full bot message)
+          // Avoid duplicating if we already have it (e.g. from optimistic update or fetch)
+          // But for now, let's just append if it's not from us (or if we don't do optimistic updates)
+
+          // If it's a user message, we might have sent it via API. 
+          // The API returns the message, so we might have added it then.
+          // Let's check if we already have this message ID.
+
+          // Actually, the backend broadcasts user messages too.
+          // We should filter out messages we just sent if we added them optimistically.
+          // But we didn't implement optimistic updates yet.
+
+          // Wait, the backend broadcast format for user message is:
+          // { "room": ..., "message": ..., "sender_id": ..., "timestamp": ..., "message_type": ... }
+
+          if (data.sender_id) {
+            const newMsg: ChatMessage = {
+              id: Date.now().toString(), // Use a temp ID or if backend sends ID use that
+              content: data.message,
+              sender: {
+                id: data.sender_id.toString(),
+                name: data.message_type === 'bot' ? 'AI Assistant' : `User ${data.sender_id}`,
+                type: data.message_type === 'bot' ? 'ai' : 'user'
+              },
+              timestamp: new Date(data.timestamp || Date.now()),
+              isCommand: data.message_type === 'command'
+            };
+
+            setMessages(prev => {
+              // Avoid duplicates if possible, but without ID it's hard.
+              // Let's assume we don't add it optimistically.
+              return [...prev, newMsg];
+            });
+          }
+        }
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket disconnected');
+      // Reconnect logic could go here
+    };
+
+    wsRef.current = ws;
+  };
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim()) return;
+
+    try {
+      const response = await messageService.sendMessage(roomCode, newMessage);
+      if (response.success && response.data) {
+        // We can add the message immediately or wait for WebSocket
+        // If we wait for WebSocket, it might feel slow.
+        // Let's add it immediately but mark it as sending?
+        // For now, let's rely on WebSocket to avoid duplicates since we broadcast it.
+        // BUT, if we rely on WebSocket, we need to make sure we don't double add.
+        // The current WebSocket implementation broadcasts to ALL clients in the room, including sender.
+
+        // So if we add it here AND receive it via WS, we get double.
+        // Let's NOT add it here, and just clear input.
+        setNewMessage("");
+      }
+    } catch (error) {
+      console.error("Failed to send message:", error);
     }
   };
 
@@ -138,8 +250,12 @@ export default function ChatRoom({
   };
 
   const getAvatarContent = (name: string) => {
-    return name.charAt(0).toUpperCase();
+    return name ? name.charAt(0).toUpperCase() : '?';
   };
+
+  if (!roomData) {
+    return <div className="flex h-screen items-center justify-center bg-slate-900 text-white">Loading room...</div>;
+  }
 
   return (
     <div className="flex h-screen bg-slate-900 relative">
@@ -187,10 +303,10 @@ export default function ChatRoom({
                 </svg>
               </button>
               <button
-                onClick={onLeaveRoom}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-medium"
+                onClick={() => router.push('/dashboard')}
+                className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors text-sm font-medium"
               >
-                Leave Room
+                Back to Dashboard
               </button>
             </div>
           </div>
@@ -198,27 +314,24 @@ export default function ChatRoom({
 
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {messages.map((message) => (
+          {messages.map((message, index) => (
             <div
-              key={message.id}
-              className={`flex ${
-                message.sender.type === "user" ? "justify-end" : "justify-start"
-              }`}
+              key={message.id || index}
+              className={`flex ${message.sender.type === "user" && message.sender.id === currentUser?.id?.toString() ? "justify-end" : "justify-start"
+                }`}
             >
               <div
-                className={`flex space-x-3 max-w-2xl ${
-                  message.sender.type === "user"
+                className={`flex space-x-3 max-w-2xl ${message.sender.type === "user" && message.sender.id === currentUser?.id?.toString()
                     ? "flex-row-reverse space-x-reverse"
                     : ""
-                }`}
+                  }`}
               >
                 {/* Avatar */}
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    message.sender.type === "ai"
+                  className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${message.sender.type === "ai"
                       ? "bg-gradient-to-br from-green-500 to-blue-600"
                       : "bg-gradient-to-br from-blue-500 to-purple-600"
-                  }`}
+                    }`}
                 >
                   <span className="text-white font-semibold text-sm">
                     {message.sender.type === "ai"
@@ -229,9 +342,8 @@ export default function ChatRoom({
 
                 {/* Message Content */}
                 <div
-                  className={`flex flex-col ${
-                    message.sender.type === "user" ? "items-end" : "items-start"
-                  }`}
+                  className={`flex flex-col ${message.sender.type === "user" && message.sender.id === currentUser?.id?.toString() ? "items-end" : "items-start"
+                    }`}
                 >
                   <div className="flex items-center space-x-2 mb-1">
                     <span className="text-sm font-medium text-slate-300">
@@ -242,15 +354,14 @@ export default function ChatRoom({
                     </span>
                   </div>
                   <div
-                    className={`rounded-lg px-4 py-2 ${
-                      message.sender.type === "user"
+                    className={`rounded-lg px-4 py-2 ${message.sender.type === "user" && message.sender.id === currentUser?.id?.toString()
                         ? "bg-blue-600 text-white"
                         : message.isCommand
-                        ? "bg-slate-700 text-slate-200 border border-slate-600"
-                        : "bg-slate-700 text-slate-200"
-                    }`}
+                          ? "bg-slate-700 text-slate-200 border border-slate-600"
+                          : "bg-slate-700 text-slate-200"
+                      }`}
                   >
-                    <p className="text-sm leading-relaxed">{message.content}</p>
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
                   </div>
                 </div>
               </div>
@@ -299,9 +410,8 @@ export default function ChatRoom({
 
       {/* Right Sidebar - Room Info */}
       <div
-        className={`${
-          showSidebar ? "translate-x-0" : "translate-x-full"
-        } lg:translate-x-0 fixed lg:relative right-0 top-0 w-80 h-full bg-slate-800 border-l border-slate-700 flex flex-col transition-transform duration-200 ease-in-out z-50 lg:z-auto`}
+        className={`${showSidebar ? "translate-x-0" : "translate-x-full"
+          } lg:translate-x-0 fixed lg:relative right-0 top-0 w-80 h-full bg-slate-800 border-l border-slate-700 flex flex-col transition-transform duration-200 ease-in-out z-50 lg:z-auto`}
       >
         {/* Room Info Header */}
         <div className="p-6 border-b border-slate-700">
@@ -377,13 +487,12 @@ export default function ChatRoom({
                     </span>
                   </div>
                   <div
-                    className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-800 ${
-                      member.status === "online"
+                    className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-slate-800 ${member.status === "online"
                         ? "bg-green-500"
                         : member.status === "away"
-                        ? "bg-yellow-500"
-                        : "bg-slate-500"
-                    }`}
+                          ? "bg-yellow-500"
+                          : "bg-slate-500"
+                      }`}
                   ></div>
                 </div>
                 <div>
